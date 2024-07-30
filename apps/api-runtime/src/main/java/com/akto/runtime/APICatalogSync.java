@@ -803,6 +803,7 @@ public class APICatalogSync {
 
     }
 
+    // Calls KeyTypes.findSubType and analyzes the value
     public static void mergeUrlsAndSave(int apiCollectionId, Boolean urlRegexMatchingEnabled, boolean mergeUrlsBasic, BloomFilter<CharSequence> existingAPIsInDb) {
         if (apiCollectionId == LLM_API_COLLECTION_ID || apiCollectionId == VULNERABLE_API_COLLECTION_ID) return;
 
@@ -1426,6 +1427,8 @@ public class APICatalogSync {
     }
 
     private int lastMergeAsyncOutsideTs = 0;
+    // For each API collection, get STIs and figure out what they are
+
     public void buildFromDB(boolean calcDiff, boolean fetchAllSTI) {
 
         loggerMaker.infoAndAddToDb("Started building from dB", LogDb.RUNTIME);
@@ -1706,7 +1709,8 @@ public class APICatalogSync {
     }
 
     int counter = 0;
-    
+
+    // Called periodically by HttpCallParser
     public void syncWithDB(boolean syncImmediately, boolean fetchAllSTI, SyncLimit syncLimit) {
         loggerMaker.infoAndAddToDb("Started sync with db! syncImmediately="+syncImmediately + " fetchAllSTI="+fetchAllSTI, LogDb.RUNTIME);
         List<WriteModel<SingleTypeInfo>> writesForParams = new ArrayList<>();

@@ -3,6 +3,7 @@ package com.akto.analyser;
 import com.akto.dao.*;
 import com.akto.dao.context.Context;
 import com.akto.dto.*;
+import com.akto.dto.channelseal.SensitiveInfoType;
 import com.akto.dto.type.*;
 import com.akto.log.LoggerMaker;
 import com.akto.parsers.HttpCallParser;
@@ -23,6 +24,7 @@ import java.util.*;
 public class ResourceAnalyser {
     BloomFilter<CharSequence> duplicateCheckerBF;
     BloomFilter<CharSequence> valuesBF;
+    // add vault value BF?
     Map<String, SingleTypeInfo> countMap = new HashMap<>();
 
     int last_sync = 0;
@@ -88,6 +90,7 @@ public class ResourceAnalyser {
     private final Set<String> hostsSeen = new HashSet<>();
 
 
+    // Analyze request by itself
     public void analyse(HttpResponseParams responseParams) {
         if (responseParams.statusCode < 200 || responseParams.statusCode >= 300) return;
 
@@ -157,6 +160,10 @@ public class ResourceAnalyser {
         // baseUrl: /api/books/2
         // url: api/books/INTEGER
 
+        // TODO: pack request params and payoad values
+        // Check data vault for matching values
+        // Record matches in alert
+
         // analyse url params
         if (urlTemplate != null) {
             String[] tokens = APICatalogSync.tokenize(baseUrl); // tokenize only the base url
@@ -195,6 +202,19 @@ public class ResourceAnalyser {
 //                        method, -1, apiCollectionId, true, false);
 //            }
 //        }
+
+        //
+        // ChannelSeal:
+        // Now that we have batch of SDEs
+        //   query all SDEs for this endpoint and merge with new ones
+        //   get unique param values
+        //   Check value against SIT pattern
+        //   check against vault BF
+        //   bulk query the vault using mongo in operator (10s)
+        //   https://www.mongodb.com/docs/manual/reference/operator/query/in
+        //   update SDE with correct SIT and hit/miss counts
+        //   save SDEs or wait for bigger batch
+        //
     }
 
 
@@ -204,6 +224,20 @@ public class ResourceAnalyser {
         String paramValue = convertToParamValue(paramObject);
         if (paramValue == null) return ;
 
+        //
+        // ChannelSeal
+        // If a SDE already exists for this param/app, use it
+        // Note: unless we cache every SDE (10K+), either need to query
+        //   or need to run merge job
+        // Idea: during sync, query all SDEs for the app and merge on fly
+        // If the param matches a SIT name or alias
+        //   Create a SDE with SIT
+        // If param matches vault BF
+        //   Create SDE with unknown SIT
+        // Add SDE to batch
+        // Note: possible to have multiple SDE for param, 1 for type and 1+ for value match
+        //
+        SensitiveInfoType sensitiveInfoType;
         SingleTypeInfo.ParamId paramId = new SingleTypeInfo.ParamId(
                 url, method, statusCode, isHeader, param, SingleTypeInfo.GENERIC, apiCollectionId, isUrlParam
         );
@@ -214,7 +248,7 @@ public class ResourceAnalyser {
         if (moved) return;
 
         // check if duplicate
-        boolean isNew = checkDuplicate(userId, combinedUrl,param, paramValue);
+        boolean isNew = checkDuplicate(userId, combinedUrl, param, paramValue);
         if (!isNew) return;
 
         // check if present
@@ -228,7 +262,6 @@ public class ResourceAnalyser {
             singleTypeInfo1.incUniqueCount(1);
         }
     }
-
 
 
     public Map<Integer, APICatalog> catalogMap = new HashMap<>();
